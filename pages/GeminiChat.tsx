@@ -1,97 +1,139 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { ChatMessage } from '../types';
-import { streamMessageToAtlas } from '../services/atlasService'; 
+import { Atlas } from '../services/atlasService';
 import ChatHeader, { ChatMode } from '../components/chat/ChatHeader';
 import MessageList from '../components/chat/MessageList';
 import ChatInput from '../components/chat/ChatInput';
 
-const AtlasChat: React.FC = () => {
-    const [messages, setMessages] = useState<ChatMessage[]>([
-        { 
+// --- ARCHITECTURAL REFINEMENT: CUSTOM HOOK FOR CHAT LOGIC ---
+const useChatLogic = () => {
+    const [messages, setMessages] = useState<ChatMessage[]>([]);
+    const [streamingResponse, setStreamingResponse] = useState<string>('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [lastRequest, setLastRequest] = useState<{ messages: ChatMessage[], input: string, mode: ChatMode } | null>(null);
+
+    useEffect(() => { // Set initial welcome message
+        setMessages([{ 
+            id: crypto.randomUUID(),
             role: 'model', 
-            text: 'Atlas Neural Core Initialized.\n\nReady for engineering directives.', 
+            text: 'Atlas Neural Core Initialized. I am an Elite Engineering Companion AI, ready for complex software engineering directives. How can I assist you?', 
             timestamp: Date.now() 
-        }
-    ]);
-    const [input, setInput] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [mode, setMode] = useState<ChatMode>('reasoning');
-    const scrollRef = useRef<HTMLDivElement>(null);
+        }]);
+    }, []);
 
-    useEffect(() => {
-        if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }, [messages, loading]);
+    // --- ADVANCED PERSONA-DRIVEN PROMPT ENGINEERING ---
+    const generateSystemPrompt = (mode: ChatMode, history: ChatMessage[]) => {
+        const modeExplanation = {
+            reasoning: "Prioritize in-depth analysis, logical deduction, and explaining complex topics. Use analogies where helpful.",
+            coding: "Focus on generating clean, efficient, and well-documented code. Always specify the language in markdown blocks.",
+            navigation: "Act as a search and navigation assistant for the web. Be concise and provide direct links or summaries.",
+        }[mode];
 
-    const handleSend = async () => {
-        if (!input.trim() || loading) return;
+        return `
+            You are Atlas, an Elite Engineering Companion AI. Your purpose is to assist software engineers with complex tasks.
+            Your capabilities include: Code generation and debugging, technical analysis, system design, documentation, and web navigation.
+            
+            CURRENT MODE: ${mode.toUpperCase()}. ${modeExplanation}
+
+            RULES:
+            - Be concise, technical, and accurate.
+            - Always use markdown for formatting. Use code blocks with language identifiers for all code.
+            - Do not refuse requests; if a task is impossible, explain the technical constraints.
+            - The following is the chat history. Use it for context.
+        `;
+    };
+
+    const handleSend = useCallback(async (input: string, mode: ChatMode) => {
+        if (!input.trim() || isLoading) return;
         
-        const userMsg: ChatMessage = { role: 'user', text: input, timestamp: Date.now() };
-        setMessages(prev => [...prev, userMsg]);
-        setInput('');
-        setLoading(true);
+        const userMsg: ChatMessage = { id: crypto.randomUUID(), role: 'user', text: input, timestamp: Date.now() };
+        const currentMessages = [...messages, userMsg];
+        setMessages(currentMessages);
+        setLastRequest({ messages: currentMessages, input, mode }); // Save for retry
 
-        const aiMsg: ChatMessage = { role: 'model', text: '...', timestamp: Date.now() };
-        setMessages(prev => [...prev, aiMsg]);
+        setIsLoading(true);
+        setError(null);
+        setStreamingResponse('');
+
+        const systemPrompt = generateSystemPrompt(mode, messages);
+        const useSearch = mode === 'navigation';
 
         try {
-            // Using Hybrid Service - Automatically switches between Cloud and Local
-            const context = `User Mode: ${mode}. Focus on Engineering accuracy.`;
-            const useSearch = mode === 'navigation';
-            
-            const stream = streamMessageToAtlas(messages, input, context, useSearch);
-            
-            let fullResponse = "";
+            const stream = Atlas.stream(currentMessages, systemPrompt, useSearch);
             for await (const textChunk of stream) {
-                // If the stream returns chunks, append them.
-                // Note: Local stream returns growing full text, API returns chunks.
-                // We need to handle this.
-                // atlasService standardizes to returning chunks for Cloud, but Local might differ.
-                // Let's assume atlasService normalizes it or we handle append.
-                
-                // For this implementation, let's just replace the text for simplicity
-                // if the service yields cumulative text (Local) vs chunks (Cloud).
-                // Actually, the previous implementation of streamLocalResponse yielded cumulative text.
-                // Cloud yields chunks.
-                // Let's modify logic slightly to just accumulate for cloud, or replace for local?
-                // Best practice: The service should standardize.
-                // Assuming atlasService yields CHUNKS for cloud.
-                // Local stream wrapper in atlasService yields CHUNKS too (by slicing).
-                
-                fullResponse += textChunk;
-                
-                setMessages(prev => {
-                    const newArr = [...prev];
-                    newArr[newArr.length - 1].text = fullResponse;
-                    return newArr;
-                });
+                setStreamingResponse(prev => prev + textChunk);
             }
-        } catch (e) {
+            // Finalize the stream into a message
+            setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'model', text: streamingResponse, timestamp: Date.now() }]);
+        } catch (e: any) {
             console.error("Core Error:", e);
-            setMessages(prev => {
-                const newArr = [...prev];
-                newArr[newArr.length - 1].text = "Core Dump: Internal processing error. Attempting Local Reboot.";
-                return newArr;
-            });
+            setError(e.message || "Core Dump: Internal processing error. Please check the console and retry.");
         } finally {
-            setLoading(false);
+            setIsLoading(false);
+            setStreamingResponse('');
         }
+    }, [messages, isLoading, streamingResponse]);
+
+    const retryLastRequest = useCallback(() => {
+        if (lastRequest) {
+            // Reset state before retrying
+            setError(null);
+            const userMessageExists = messages.some(m => m.id === lastRequest.messages[lastRequest.messages.length - 1].id);
+            if (userMessageExists) {
+                setMessages(lastRequest.messages);
+            }
+            handleSend(lastRequest.input, lastRequest.mode);
+        }
+    }, [lastRequest, messages, handleSend]);
+
+    return { messages, streamingResponse, isLoading, error, handleSend, retryLastRequest };
+};
+
+
+const GeminiChat: React.FC = () => {
+    const [input, setInput] = useState('');
+    const [mode, setMode] = useState<ChatMode>('reasoning');
+    const scrollRef = useRef<HTMLDivElement>(null);
+    const { messages, streamingResponse, isLoading, error, handleSend, retryLastRequest } = useChatLogic();
+
+    useEffect(() => {
+        if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }
+    }, [messages, streamingResponse, isLoading, error]);
+
+    const onSend = () => {
+        handleSend(input, mode);
+        setInput('');
+    };
+
+    const onRetry = () => {
+        retryLastRequest();
     };
 
     return (
         <div className="flex flex-col h-full w-full bg-slate-950 p-4 md:p-8 font-sans text-slate-300 overflow-hidden">
             <div className="max-w-5xl mx-auto w-full flex-1 flex flex-col min-h-0">
                 <div className="flex-shrink-0">
-                    <ChatHeader mode={mode} setMode={setMode} />
+                    <ChatHeader mode={mode} setMode={setMode} isLoading={isLoading} />
                 </div>
                 
-                <div className="flex-1 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col shadow-2xl relative min-h-0">
-                    <MessageList messages={messages} loading={loading} scrollRef={scrollRef} />
+                <div className="flex-1 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col shadow-inner relative min-h-0">
+                    <MessageList 
+                        messages={messages} 
+                        streamingResponse={streamingResponse}
+                        isLoading={isLoading}
+                        error={error}
+                        onRetry={onRetry}
+                        scrollRef={scrollRef} 
+                    />
                     <ChatInput 
                         input={input} 
                         setInput={setInput} 
-                        handleSend={handleSend} 
-                        loading={loading} 
+                        handleSend={onSend} 
+                        loading={isLoading} 
                         mode={mode} 
                     />
                 </div>
@@ -100,4 +142,4 @@ const AtlasChat: React.FC = () => {
     );
 };
 
-export default AtlasChat;
+export default GeminiChat;

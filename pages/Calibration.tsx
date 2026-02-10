@@ -1,148 +1,23 @@
 
-import React, { useState, useEffect } from 'react';
-import { generateCalibrationQuiz } from '../services/atlasService';
-import { Brain, RefreshCw, HelpCircle, AlertTriangle, Activity } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Atlas } from '../services/atlasService';
+import { Brain, RefreshCw, HelpCircle, AlertTriangle, Activity, CheckCircle, XCircle, Trophy } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import { motion, AnimatePresence } from 'framer-motion';
 
-interface QuizData {
-    topic: string;
-    difficulty: string;
-    question: string;
-    answer: string;
-}
+const MotionDiv = motion.div as any;
 
-const Calibration: React.FC = () => {
-  const [quiz, setQuiz] = useState<QuizData | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [revealed, setRevealed] = useState(false);
-  const [streak, setStreak] = useState(0);
+type Difficulty = 'HARD' | 'VETERAN' | 'ELITE';
+interface QuizData {\n    topic: string;\n    difficulty: Difficulty;\n    question: string;\n    answer: string;\n}
 
-  // Load streak from storage on mount
-  useEffect(() => {
-    const savedStreak = localStorage.getItem('atlas_calibration_streak');
-    if (savedStreak) {
-        setStreak(parseInt(savedStreak, 10));
-    }
-    loadNewQuiz();
-  }, []);
-
-  // Persist streak whenever it changes
-  useEffect(() => {
-    localStorage.setItem('atlas_calibration_streak', streak.toString());
-  }, [streak]);
-
-  const loadNewQuiz = async () => {
-    setLoading(true);
-    setRevealed(false);
-    
-    // Simulate thinking delay for effect
-    const rawResponse = await generateCalibrationQuiz();
-    
-    try {
-        const data = JSON.parse(rawResponse);
-        setQuiz(data);
-    } catch (e) {
-        console.error("Failed to parse quiz", e);
-        setQuiz({
-            topic: "Neural Core Glitch",
-            difficulty: "System",
-            question: "The Atlas Neural Core returned malformed data. This is a simulation artifact.",
-            answer: "Please refresh the module to re-establish the uplink."
-        });
-    }
-    setLoading(false);
-  };
-
-  const handleRate = (grade: 'S' | 'A' | 'F') => {
-      if (grade === 'S' || grade === 'A') {
-          setStreak(s => s + 1);
-      } else {
-          setStreak(0);
-      }
-      loadNewQuiz();
-  };
-
-  return (
-    <div className="min-h-full flex flex-col items-center justify-center p-6 bg-slate-950 font-sans text-slate-300">
-        
-        {/* Header HUD */}
-        <div className="w-full max-w-2xl mb-8 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-900/20 rounded-lg border border-blue-500/30">
-                    <Brain className="w-6 h-6 text-blue-400" />
-                </div>
-                <div>
-                    <h1 className="text-xl font-black text-white tracking-wide uppercase">Neural Calibration</h1>
-                    <div className="flex items-center gap-2 text-xs font-mono text-slate-500">
-                        <Activity className="w-3 h-3" /> ACTIVE RECALL PROTOCOL
-                    </div>
-                </div>
-            </div>
-            <div className="text-right">
-                <div className="text-[10px] font-mono text-slate-500 uppercase">Current Streak</div>
-                <div className={`text-2xl font-black ${streak > 0 ? 'text-emerald-400' : 'text-slate-600'}`}>{streak}</div>
-            </div>
-        </div>
-
-        {/* Main Card */}
-        <div className="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl relative overflow-hidden min-h-[400px] flex flex-col">
-            
-            {loading ? (
-                <div className="flex-1 flex flex-col items-center justify-center space-y-4">
-                    <RefreshCw className="w-12 h-12 text-blue-500 animate-spin" />
-                    <p className="text-blue-400 font-mono text-sm animate-pulse">Generating Elite Scenario...</p>
-                </div>
-            ) : quiz ? (
-                <>
-                    {/* Question Face */}
-                    <div className="p-8 md:p-12 flex-1 flex flex-col">
-                        <div className="flex justify-between items-start mb-6">
-                            <span className="px-3 py-1 rounded-full bg-slate-800 border border-slate-700 text-xs font-bold text-slate-400 uppercase tracking-wider">
-                                {quiz.topic}
-                            </span>
-                            <span className="text-xs font-mono text-red-400 flex items-center gap-1 border border-red-900/50 px-2 py-1 rounded bg-red-950/20">
-                                <AlertTriangle className="w-3 h-3" /> {quiz.difficulty}
-                            </span>
-                        </div>
-                        
-                        <h2 className="text-xl md:text-2xl font-bold text-white leading-relaxed mb-8 flex-1">
-                            {quiz.question}
-                        </h2>
-
-                        {!revealed && (
-                            <button 
-                                onClick={() => setRevealed(true)}
-                                className="w-full py-4 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-sm font-bold uppercase tracking-widest text-slate-300 transition-all hover:scale-[1.02] flex items-center justify-center gap-2"
-                            >
-                                <HelpCircle className="w-4 h-4" /> Reveal Verdict
-                            </button>
-                        )}
-                    </div>
-
-                    {/* Answer Reveal (Animated) */}
-                    {revealed && (
-                        <div className="bg-slate-950 border-t border-slate-800 p-8 md:p-12 animate-slide-up">
-                            <div className="mb-6 prose prose-invert prose-sm max-w-none">
-                                <h3 className="text-emerald-400 text-xs font-black uppercase tracking-widest mb-2">Technical Solution</h3>
-                                <ReactMarkdown>{quiz.answer}</ReactMarkdown>
-                            </div>
-
-                            <div className="grid grid-cols-4 gap-3 pt-6 border-t border-slate-900">
-                                <button onClick={() => handleRate('S')} className="py-3 rounded bg-emerald-900/20 border border-emerald-900/50 hover:bg-emerald-600 hover:text-white text-emerald-500 font-black transition-all">S</button>
-                                <button onClick={() => handleRate('A')} className="py-3 rounded bg-blue-900/20 border border-blue-900/50 hover:bg-blue-600 hover:text-white text-blue-500 font-black transition-all">A</button>
-                                <button onClick={() => handleRate('A')} className="py-3 rounded bg-amber-900/20 border border-amber-900/50 hover:bg-amber-600 hover:text-white text-amber-500 font-black transition-all">B</button>
-                                <button onClick={() => handleRate('F')} className="py-3 rounded bg-red-900/20 border border-red-900/50 hover:bg-red-600 hover:text-white text-red-500 font-black transition-all">F</button>
-                            </div>
-                            <div className="text-center mt-2 text-[10px] text-slate-600 font-mono uppercase">Rate your recall accuracy</div>
-                        </div>
-                    )}
-                </>
-            ) : (
-                <div className="p-8 text-center text-red-500">Error loading quiz module.</div>
-            )}
-        </div>
-    </div>
-  );
-};
-
-export default Calibration;
+// --- SOPHISTICATED SKELETON LOADER ---
+const QuizSkeleton: React.FC = () => (\n    <div className=\"w-full h-full p-8 md:p-12 flex flex-col animate-pulse\">\n        <div className=\"flex justify-between items-start mb-6\">\n            <div className=\"h-8 w-32 bg-slate-700/50 rounded-full\"></div>\n            <div className=\"h-7 w-24 bg-slate-700/50 rounded\"></div>\n        </div>\n        <div className=\"space-y-4 flex-1 mb-8\">\n            <div className=\"h-6 w-full bg-slate-700/50 rounded\"></div>\n            <div className=\"h-6 w-5/6 bg-slate-700/50 rounded\"></div>\n            <div className=\"h-6 w-3/4 bg-slate-700/50 rounded\"></div>\n        </div>\n        <div className=\"h-12 w-full bg-slate-700/50 rounded-xl\"></div>\n    </div>\n);\n
+const Calibration: React.FC = () => {\n    const [quiz, setQuiz] = useState<QuizData | null>(null);\n    const [error, setError] = useState<string | null>(null);\n    const [state, setState] = useState<'IDLE' | 'LOADING' | 'SUCCESS' | 'ERROR'>('IDLE');\n    const [revealed, setRevealed] = useState(false);\n    const [streak, setStreak] = useState(0);\n\n    useEffect(() => {\n        const savedStreak = localStorage.getItem(\'atlas_calibration_streak\');\n        if (savedStreak) setStreak(parseInt(savedStreak, 10) || 0);\n        loadNewQuiz();\n    }, []);\n\n    useEffect(() => {\n        localStorage.setItem(\'atlas_calibration_streak\', streak.toString());\n    }, [streak]);\n\n    // --- PERSONA-DRIVEN PROMPT ENGINEERING ---
+    const loadNewQuiz = useCallback(async () => {\n        setState(\'LOADING\');\n        setRevealed(false);\n        setError(null);\n\n        const topics = ['System Design', 'Data Structures & Algorithms', 'Concurrency', 'Database Internals', 'SOLID Principles', 'Cloud Architecture (AWS/GCP)', 'Kubernetes', 'Network Protocols'];\n        const prompt = `\n            You are The Calibration Officer, an AI that generates challenging technical interview questions.\n            Generate a single quiz item based on the following rules:\n            1. Pick one topic from this list: ${topics.join(\', \')}.\n            2. The difficulty MUST be one of: \'HARD\', \'VETERAN\', or \'ELITE\'.\n            3. The question should be a concise but challenging problem or concept explanation.\n            4. The answer should be a clear, expert-level explanation.\n            5. You MUST return the response as a single, raw JSON object: { \"topic\": \"...\", \"difficulty\": \"...\", \"question\": \"...\", \"answer\": \"...\" }\n        `;\n\n        try {\n            // Add a small artificial delay for a better UX, making loading feel deliberate\n            await new Promise(res => setTimeout(res, 600));\n            const response = await Atlas.generate(prompt, { isJson: true }) as { data: QuizData };\n            if (!response.data?.topic || !response.data.question || !response.data.answer) {\n                throw new Error(\"AI returned incomplete data.\");\n            }\n            setQuiz(response.data);\n            setState(\'SUCCESS\');\n        } catch (e: any) {\n            console.error(\"Calibration Error:\", e);\n            setError(e.message || \"The Neural Core failed to generate a scenario. Please try again.\");\n            setState(\'ERROR\');\n        }\n    }, []);\n\n    // --- REFINED RATING SYSTEM ---
+    const handleRate = (correct: boolean) => {\n        setStreak(current => correct ? current + 1 : 0);\n        loadNewQuiz();\n    };\n
+    const getDifficultyClass = (d: Difficulty) => {\n        switch (d) {\n            case 'ELITE': return 'text-red-400 border-red-900/50 bg-red-950/20';\n            case 'VETERAN': return 'text-amber-400 border-amber-900/50 bg-amber-950/20';\n            default: return 'text-sky-400 border-sky-900/50 bg-sky-950/20';\n        }\n    };\n
+    return (\n        <div className=\"min-h-full h-full flex flex-col items-center justify-center p-4 sm:p-6 bg-slate-950 font-sans text-slate-300\">\n            <header className=\"w-full max-w-3xl mb-8 flex items-center justify-between\">\n                <div className=\"flex items-center gap-3\">\n                    <div className=\"p-2 bg-blue-900/20 rounded-lg border border-blue-500/30\">\n                        <Brain className=\"w-6 h-6 text-blue-400\" />\n                    </div>\n                    <div>\n                        <h1 className=\"text-xl font-black text-white tracking-wide uppercase\">Neural Calibration</h1>\n                        <p className=\"flex items-center gap-2 text-xs font-mono text-slate-500\">\n                            <Activity className=\"w-3 h-3\" /> ACTIVE RECALL PROTOCOL\n                        </p>\n                    </div>\n                </div>\n                <div className=\"text-right\">\n                    <div className=\"text-[10px] font-mono text-slate-500 uppercase flex items-center gap-1.5 justify-end\">\n                        <Trophy className=\"w-3 h-3\" /> STREAK\n                    </div>\n                    <div className={`text-3xl font-black transition-colors ${streak > 0 ? 'text-emerald-400' : 'text-slate-600'}`}>{streak}</div>\n                </div>\n            </header>\n
+            <main className=\"w-full max-w-3xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl relative overflow-hidden min-h-[450px] flex flex-col\">\n                <AnimatePresence mode=\"wait\">\n                    {state === 'LOADING' && (\n                        <MotionDiv key=\"loading\" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className=\"flex-1\"><QuizSkeleton /></MotionDiv>\n                    )}
+                    {state === 'ERROR' && (\n                        <MotionDiv key=\"error\" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className=\"flex-1 flex flex-col items-center justify-center text-center p-8\">\n                            <AlertTriangle className=\"w-12 h-12 text-red-500/50 mb-4\" />\n                            <h3 className=\"text-lg font-bold text-red-400 mb-2\">Generation Failed</h3>\n                            <p className=\"text-sm text-slate-400 font-mono bg-slate-800/50 p-3 rounded-md max-w-md\">{error}</p>\n                             <button onClick={loadNewQuiz} className=\"mt-6 flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded uppercase tracking-wider transition-all\"><RefreshCw className=\"w-3 h-3\" />Retry</button>\n                        </MotionDiv>\n                    )}
+                    {state === 'SUCCESS' && quiz && (\n                        <MotionDiv key=\"quiz\" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className=\"flex-1 flex flex-col\">\n                            <div className=\"p-8 md:p-12 flex-1 flex flex-col\">\n                                <div className=\"flex justify-between items-start mb-6\">\n                                    <span className=\"px-3 py-1 rounded-full bg-slate-800 border border-slate-700 text-xs font-bold text-slate-300 uppercase tracking-wider\">{quiz.topic}</span>\n                                    <span className={`text-xs font-mono flex items-center gap-1.5 border px-2 py-1 rounded ${getDifficultyClass(quiz.difficulty)}`}>\n                                        <AlertTriangle className=\"w-3 h-3\" /> {quiz.difficulty}\n                                    </span>\n                                </div>\n                                <div className=\"text-xl md:text-2xl font-bold text-white leading-relaxed mb-8 flex-1 prose prose-invert max-w-none prose-p:my-0\">\n                                     <ReactMarkdown>{quiz.question}</ReactMarkdown>\n                                </div>\n                                {!revealed && (\n                                    <button onClick={() => setRevealed(true)} className=\"w-full py-4 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-sm font-bold uppercase tracking-widest text-slate-300 transition-all hover:scale-[1.02] flex items-center justify-center gap-2 shadow-lg\">\n                                        <HelpCircle className=\"w-4 h-4\" /> Reveal Solution\n                                    </button>\n                                )}\n                            </div>\n
+                            <AnimatePresence>\n                                {revealed && (\n                                    <MotionDiv initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className=\"bg-slate-950 border-t border-slate-800 p-8 md:p-12\">\n                                        <div className=\"mb-6 prose prose-invert prose-sm max-w-none prose-headings:text-emerald-400 prose-headings:text-xs prose-headings:font-black prose-headings:uppercase prose-headings:tracking-widest\">\n                                            <h3>Expert Verdict</h3>\n                                            <ReactMarkdown>{quiz.answer}</ReactMarkdown>\n                                        </div>\n                                        <div className=\"grid grid-cols-2 gap-3 pt-6 border-t border-slate-800/50\">\n                                            <button onClick={() => handleRate(false)} className=\"py-3 rounded-lg flex items-center justify-center gap-2 bg-rose-900/40 border border-rose-800/80 hover:bg-rose-600 text-rose-300 hover:text-white font-bold transition-all\">\n                                                <XCircle className=\"w-4 h-4\" /> Review Needed\n                                            </button>\n                                            <button onClick={() => handleRate(true)} className=\"py-3 rounded-lg flex items-center justify-center gap-2 bg-emerald-900/40 border border-emerald-800/80 hover:bg-emerald-600 text-emerald-300 hover:text-white font-bold transition-all\">\n                                                <CheckCircle className=\"w-4 h-4\" /> Knew It\n                                            </button>\n                                        </div>\n                                        <p className=\"text-center mt-3 text-[10px] text-slate-600 font-mono uppercase\">Rate Your Recall Accuracy</p>\n                                    </MotionDiv>\n                                )}\n                            </AnimatePresence>\n                        </MotionDiv>\n                    )}\n                </AnimatePresence>\n            </main>\n        </div>\n    );\n};\n\nexport default Calibration;\n

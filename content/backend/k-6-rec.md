@@ -1,0 +1,7 @@
+
+# Pipeline failure recovery
+
+This is a placeholder for the detailed guide on "Pipeline failure recovery".
+
+_Content for this section is pending generation._
+    

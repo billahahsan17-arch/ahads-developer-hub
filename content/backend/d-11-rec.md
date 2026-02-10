@@ -1,0 +1,7 @@
+
+# Decision records
+
+This is a placeholder for the detailed guide on "Decision records".
+
+_Content for this section is pending generation._
+    

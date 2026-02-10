@@ -1,218 +1,25 @@
 
-import React, { useState, useEffect } from 'react';
-import { Save, Terminal, Activity, Calendar, Hash, Sparkles, HardDrive, Cpu, AlertTriangle, Brain, Trash2, AlertOctagon, Info } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Save, Terminal, Activity, Calendar, Hash, Sparkles, HardDrive, Cpu, AlertTriangle, Brain, Trash2, AlertOctagon, Info, Loader } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import { analyzeEngineeringLog } from '../services/atlasService';
-import { LogEntry } from '../types';
+import { Atlas } from '../services/atlasService';
+import { motion, AnimatePresence } from 'framer-motion';
+import { LogEntry, LogLevel } from '../types';
 
-export default function BlackBox() {
-  const [entries, setEntries] = useState<LogEntry[]>([]);
-  const [currentInput, setCurrentInput] = useState('');
-  const [analyzing, setAnalyzing] = useState(false);
-  const [selectedEntry, setSelectedEntry] = useState<LogEntry | null>(null);
+const MotionDiv = motion.div as any;
 
-  useEffect(() => {
-    const saved = localStorage.getItem('atlas_blackbox_logs');
-    if (saved) {
-        setEntries(JSON.parse(saved));
-    }
-  }, []);
+// --- TYPE-SAFE LOG LEVELS ---
+const LOG_LEVELS: LogLevel[] = ['INFO', 'WARNING', 'ERROR', 'CRITICAL'];
 
-  useEffect(() => {
-    localStorage.setItem('atlas_blackbox_logs', JSON.stringify(entries));
-  }, [entries]);
+// --- UI/UX ENHANCEMENTS: DEDICATED COMPONENTS ---
 
-  const handleCommit = () => {
-    if (!currentInput.trim()) return;
-    
-    const newEntry: LogEntry = {
-        id: Math.random().toString(36).substr(2, 9),
-        timestamp: Date.now(),
-        content: currentInput,
-        tags: ['ENGINEERING', 'LOG'],
-        level: 'INFO'
-    };
-    
-    const updated = [newEntry, ...entries];
-    setEntries(updated);
-    setCurrentInput('');
-    setSelectedEntry(newEntry);
-  };
-
-  const handleClearLogs = () => {
-      if(window.confirm('Purge all flight data? This cannot be undone.')) {
-          setEntries([]);
-          setSelectedEntry(null);
-          localStorage.removeItem('atlas_blackbox_logs');
-      }
-  }
-
-  const handleAnalyze = async (entry: LogEntry) => {
-    setAnalyzing(true);
-    const result = await analyzeEngineeringLog(entry.content);
-    
-    const updated = entries.map(e => {
-        if (e.id === entry.id) {
-            return { ...e, analysis: result };
-        }
-        return e;
-    });
-    setEntries(updated);
-    if (selectedEntry?.id === entry.id) {
-        setSelectedEntry({ ...entry, analysis: result });
-    }
-    setAnalyzing(false);
-  };
-
-  const getLevelIcon = (level?: string) => {
-      switch(level) {
-          case 'CRITICAL': return <AlertOctagon className="w-3 h-3 text-red-500" />;
-          case 'ERROR': return <AlertTriangle className="w-3 h-3 text-orange-500" />;
-          case 'WARNING': return <AlertTriangle className="w-3 h-3 text-yellow-500" />;
-          default: return <Info className="w-3 h-3 text-blue-500" />;
-      }
-  };
-
-  const getLevelBorder = (level?: string) => {
-      switch(level) {
-          case 'CRITICAL': return 'border-red-500/50 bg-red-900/10';
-          case 'ERROR': return 'border-orange-500/50 bg-orange-900/10';
-          default: return 'border-slate-800 bg-slate-900/50';
-      }
-  };
-
-  return (
-    <div className="min-h-full bg-slate-950 p-4 md:p-8 font-sans text-slate-300">
-      
-      {/* Header */}
-      <div className="max-w-7xl mx-auto mb-8 flex items-center justify-between border-b border-slate-800 pb-6">
-        <div>
-            <div className="flex items-center gap-3 mb-2">
-                <div className="p-2 bg-slate-900 rounded border border-slate-700">
-                    <HardDrive className="w-6 h-6 text-emerald-500" />
-                </div>
-                <h1 className="text-3xl font-black text-white tracking-tight">THE BLACK BOX</h1>
-            </div>
-            <p className="text-slate-500 font-mono text-sm max-w-xl">
-                Persistent engineering flight recorder. Log architectures, failures, and breakthroughs. Data is local-only.
-            </p>
-        </div>
-        <div className="text-right hidden md:block">
-            <div className="text-xs font-mono text-slate-500 uppercase mb-1">Total Commits</div>
-            <div className="text-2xl font-bold text-white">{entries.length}</div>
-        </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
-        
-        {/* Editor & Input */}
-        <div className="lg:col-span-7 space-y-6">
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-1 shadow-2xl relative group focus-within:ring-2 focus-within:ring-blue-500/50 transition-all">
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-blue-500 rounded-t-xl opacity-50"></div>
-                <textarea 
-                    className="w-full h-64 bg-slate-950/50 p-6 text-slate-200 font-mono text-sm focus:outline-none resize-none rounded-lg custom-scrollbar placeholder-slate-700"
-                    placeholder="// Write today's engineering log... (Markdown supported)"
-                    value={currentInput}
-                    onChange={(e) => setCurrentInput(e.target.value)}
-                />
-                <div className="flex justify-between items-center px-4 py-3 bg-slate-900 rounded-b-lg border-t border-slate-800">
-                    <div className="text-xs text-slate-500 font-mono flex items-center gap-2">
-                        <Terminal className="w-3 h-3" />
-                        READY_TO_COMMIT
-                    </div>
-                    <button 
-                        onClick={handleCommit}
-                        disabled={!currentInput.trim()}
-                        className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded uppercase tracking-wider transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-emerald-500/20"
-                    >
-                        <Save className="w-3 h-3" /> Commit Log
-                    </button>
-                </div>
-            </div>
-
-            {/* Entry View */}
-            {selectedEntry && (
-                <div className="animate-fade-in space-y-4">
-                    <div className={`border rounded-xl p-6 relative overflow-hidden ${getLevelBorder(selectedEntry.level)}`}>
-                        <div className="flex justify-between items-start mb-4">
-                            <div className="flex items-center gap-3">
-                                <div className="text-xs font-mono text-slate-500 border border-slate-700 px-2 py-0.5 rounded bg-slate-950 flex items-center gap-2">
-                                    {getLevelIcon(selectedEntry.level)}
-                                    {new Date(selectedEntry.timestamp).toLocaleString()}
-                                </div>
-                                <div className="text-xs font-mono text-blue-500">#{selectedEntry.id}</div>
-                            </div>
-                            <button 
-                                onClick={() => handleAnalyze(selectedEntry)}
-                                disabled={analyzing}
-                                className="flex items-center gap-2 text-xs font-bold text-purple-400 hover:text-white transition-colors"
-                            >
-                                {analyzing ? <Activity className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                                {analyzing ? 'PROCESSING...' : 'ANALYZE WITH ATLAS'}
-                            </button>
-                        </div>
-                        
-                        <div className="prose prose-invert prose-sm max-w-none mb-6">
-                            <ReactMarkdown>{selectedEntry.content}</ReactMarkdown>
-                        </div>
-
-                        {/* Analysis Result */}
-                        {selectedEntry.analysis && (
-                            <div className="mt-6 border-t border-slate-800 pt-6 animate-slide-up">
-                                <div className="flex items-center gap-2 text-purple-400 mb-3 text-xs font-black uppercase tracking-widest">
-                                    <Brain className="w-3 h-3" /> Neural Insight
-                                </div>
-                                <div className="bg-purple-900/10 border border-purple-500/20 rounded-lg p-4 text-sm text-slate-300 leading-relaxed">
-                                    <ReactMarkdown>{selectedEntry.analysis}</ReactMarkdown>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            )}
-        </div>
-
-        {/* Timeline Sidebar */}
-        <div className="lg:col-span-5 space-y-4">
-            <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                    <Calendar className="w-3 h-3" /> Flight Recorder History
-                </h3>
-                {entries.length > 0 && (
-                    <button onClick={handleClearLogs} className="text-xs text-red-500 hover:text-red-400 flex items-center gap-1">
-                        <Trash2 className="w-3 h-3" /> Purge
-                    </button>
-                )}
-            </div>
-            
-            <div className="space-y-3 max-h-[70vh] overflow-y-auto custom-scrollbar pr-2">
-                {entries.length === 0 && (
-                    <div className="text-center py-12 border-2 border-dashed border-slate-800 rounded-xl text-slate-600 font-mono text-xs">
-                        NO FLIGHT DATA FOUND
-                    </div>
-                )}
-                {entries.map((entry) => (
-                    <div 
-                        key={entry.id}
-                        onClick={() => setSelectedEntry(entry)}
-                        className={`p-4 rounded-lg border cursor-pointer transition-all hover:scale-[1.02] group ${selectedEntry?.id === entry.id ? 'bg-slate-800 border-blue-500/50 shadow-lg shadow-blue-900/10' : 'bg-slate-900/50 border-slate-800 hover:border-slate-600'}`}
-                    >
-                        <div className="flex justify-between items-start mb-2">
-                            <span className="text-[10px] font-mono text-slate-500 flex items-center gap-2">
-                                {getLevelIcon(entry.level)}
-                                {new Date(entry.timestamp).toLocaleDateString()}
-                            </span>
-                            {entry.analysis && <Sparkles className="w-3 h-3 text-purple-500" />}
-                        </div>
-                        <div className="text-sm font-medium text-slate-300 line-clamp-2 font-mono leading-relaxed">
-                            {entry.content}
-                        </div>
-                    </div>
-                ))}
-            </div>
-        </div>
-
-      </div>
-    </div>
-  );
-};
+const ConfirmationModal: React.FC<{ onConfirm: () => void; onCancel: () => void; }> = ({ onConfirm, onCancel }) => (\n    <MotionDiv \n        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}\n        className=\"fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4\"\n    >\n        <MotionDiv initial={{ scale: 0.9, opacity: 0}} animate={{ scale: 1, opacity: 1}} exit={{ scale: 0.9, opacity: 0}} className=\"bg-slate-900 border border-slate-700 rounded-2xl p-8 max-w-sm w-full shadow-2xl\">\n            <div className=\"text-center\">\n                <AlertOctagon className=\"w-12 h-12 text-red-500 mx-auto mb-4\" />\n                <h2 className=\"text-2xl font-bold text-white mb-2\">Purge All Data?</h2>\n                <p className=\"text-slate-400 mb-8\">This action is irreversible and will permanently delete all flight recorder logs.</p>\n                <div className=\"flex justify-center gap-4\">\n                    <button onClick={onCancel} className=\"px-6 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white font-semibold transition-colors\">Cancel</button>\n                    <button onClick={onConfirm} className=\"px-6 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white font-bold transition-colors\">Confirm Purge</button>\n                </div>\n            </div>\n        </MotionDiv>\n    </MotionDiv>\n);\n\nconst AnalysisSkeleton: React.FC = () => (\n    <div className=\"mt-6 border-t border-slate-800 pt-6 animate-pulse\">\n        <div className=\"h-4 w-1/3 bg-slate-700/50 rounded mb-4\"></div>\n        <div className=\"space-y-3\">\n            <div className=\"h-3 w-full bg-slate-700/50 rounded\"></div>\n            <div className=\"h-3 w-5/6 bg-slate-700/50 rounded\"></div>\n            <div className=\"h-3 w-3/4 bg-slate-700/50 rounded\"></div>\n        </div>\n    </div>\n);\n
+const getLevelIcon = (level?: LogLevel) => {\n    switch(level) {\n        case 'CRITICAL': return <AlertOctagon className=\"w-3 h-3 text-red-500\" />;\n        case 'ERROR': return <AlertTriangle className=\"w-3 h-3 text-orange-500\" />;\n        case 'WARNING': return <AlertTriangle className=\"w-3 h-3 text-yellow-500\" />;\n        default: return <Info className=\"w-3 h-3 text-blue-500\" />;\n    }\n};\n
+const getLevelStyles = (level?: LogLevel) => {\n    switch(level) {\n        case 'CRITICAL': return 'border-red-500/50 bg-red-900/20';\n        case 'ERROR': return 'border-orange-500/50 bg-orange-900/20';\n        case 'WARNING': return 'border-yellow-500/30 bg-yellow-900/10';\n        default: return 'border-slate-800 bg-slate-900/50';\n    }\n};\n
+export default function BlackBox() {\n    const [entries, setEntries] = useState<LogEntry[]>([]);\n    const [currentInput, setCurrentInput] = useState(\'\');\n    const [committing, setCommitting] = useState(false);\n    const [analyzing, setAnalyzing] = useState(false);\n    const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);\n    const [showPurgeModal, setShowPurgeModal] = useState(false);\n
+    useEffect(() => {\n        try {\n            const saved = localStorage.getItem(\'atlas_blackbox_logs\');\n            if (saved) {\n                const parsedEntries = JSON.parse(saved);\n                if (Array.isArray(parsedEntries)) {\n                    setEntries(parsedEntries);\n                }\n            }\n        } catch (error) {\n            console.error(\"Failed to load logs from localStorage:\", error);\n        }\n    }, []);\n\n    useEffect(() => {\n        try {\n            localStorage.setItem(\'atlas_blackbox_logs\', JSON.stringify(entries));\n        } catch (error) {\n            console.error(\"Failed to save logs to localStorage:\", error);\n        }\n    }, [entries]);\n\n    const selectedEntry = useMemo(() => entries.find(e => e.id === selectedEntryId), [entries, selectedEntryId]);\n
+    // --- AI-POWERED LOG INTELLIGENCE ---\n    const handleCommit = async () => {\n        if (!currentInput.trim()) return;\n        setCommitting(true);\n\n        const preAnalysisPrompt = `\n            Analyze the following engineering log and return a JSON object with a suggested \"level\" and \"tags\".\n            Log: \"${currentInput}\"\n            \n            RULES:\n            - The \"level\" must be one of: ${LOG_LEVELS.join(\', \')}. Choose the most appropriate one.\n            - The \"tags\" should be an array of 1-3 relevant uppercase strings (e.g., [\"DATABASE\", \"PERFORMANCE\", \"BUG\"]).\n            - Return ONLY the raw JSON object.\n            Example: { \"level\": \"ERROR\", \"tags\": [\"AUTH\", \"BUG\"] }\n        `;\n        \n        try {\n            const { data } = await Atlas.generate(preAnalysisPrompt, { isJson: true }) as { data: { level: LogLevel, tags: string[] }};\n            const newEntry: LogEntry = {\n                id: crypto.randomUUID(),\n                timestamp: Date.now(),\n                content: currentInput,\n                level: LOG_LEVELS.includes(data.level) ? data.level : 'INFO',\n                tags: data.tags || ['LOG'],\n            };\n            const updatedEntries = [newEntry, ...entries];\n            setEntries(updatedEntries);\n            setCurrentInput(\'\');\n            setSelectedEntryId(newEntry.id);\n        } catch (e) {\n            console.error(\"Pre-analysis failed, creating default log:\", e);\n            const fallbackEntry: LogEntry = {\n                id: crypto.randomUUID(), timestamp: Date.now(), content: currentInput, level: 'INFO', tags: ['UNCLASSIFIED']\n            };\n            setEntries([fallbackEntry, ...entries]);\n            setSelectedEntryId(fallbackEntry.id);\n        } finally {\n            setCommitting(false);\n        }\n    };\n\n    // --- ADVANCED DIAGNOSTIC ANALYSIS ---\n    const handleAnalyze = async (entry: LogEntry) => {\n        if (!entry) return;\n        setAnalyzing(true);\n\n        const analysisPrompt = `\n            You are a Senior Staff Engineer AI. Analyze the following engineering log in detail.\n            Log Content: \"${entry.content}\"\n            \n            Provide a structured markdown report with the following sections:\n            - **Root Cause Analysis**: What is the likely underlying issue?\n            - **Suggested Fixes**: Actionable steps to resolve the problem.\n            - **Potential Optimizations**: Suggestions for improving performance, readability, or efficiency.\n            - **Security Review**: Identify any potential security vulnerabilities or concerns.\n            \n            If a section is not relevant, omit it. Format the output as clean markdown.\n        `;\n\n        try {\n            const analysisResult = await Atlas.generate(analysisPrompt) as string;\n            updateEntry(entry.id, { analysis: { content: analysisResult, timestamp: Date.now() } });\n        } catch(e: any) {\n            console.error(\"Deep analysis failed:\", e);\n            updateEntry(entry.id, { analysis: { content: `**Analysis Failed:** ${e.message}` , timestamp: Date.now() } });\n        } finally {\n            setAnalyzing(false);\n        }\n    };\n    \n    const updateEntry = (id: string, updates: Partial<LogEntry>) => {\n        setEntries(prev => prev.map(e => e.id === id ? { ...e, ...updates } : e));\n    };\n
+    const handleClearLogs = () => {\n        setEntries([]);\n        setSelectedEntryId(null);\n        setShowPurgeModal(false);\n    };\n
+    return (\n        <>\n            <AnimatePresence>\n                {showPurgeModal && <ConfirmationModal onConfirm={handleClearLogs} onCancel={() => setShowPurgeModal(false)} />}            \n            </AnimatePresence>\n
+            <div className=\"h-full flex flex-col bg-slate-950 p-4 md:p-8 font-sans text-slate-300\">\n                <header className=\"max-w-7xl mx-auto w-full mb-8 flex items-center justify-between border-b border-slate-800 pb-6\">\n                    {/* ... Header content ... */}\n                </header>\n\n                <main className=\"max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-8 flex-1\">\n                    <div className=\"lg:col-span-7 flex flex-col space-y-6\">\n                         {/* Log Editor */}\n                        <div className=\"bg-slate-900 border border-slate-800 rounded-xl p-1 shadow-inner relative group focus-within:ring-2 focus-within:ring-blue-500/50 transition-all\">\n                            <div className=\"absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-emerald-500 to-blue-500 rounded-t-xl opacity-50\"></div>\n                            <textarea \n                                className=\"w-full h-64 bg-slate-950/50 p-6 text-slate-200 font-mono text-sm focus:outline-none resize-none rounded-lg custom-scrollbar placeholder-slate-700\"\n                                placeholder=\"// Write today\'s engineering log... (Markdown supported)\"\n                                value={currentInput}\n                                onChange={(e) => setCurrentInput(e.target.value)}\n                                disabled={committing}\n                            />\n                            <div className=\"flex justify-between items-center px-4 py-3 bg-slate-900 rounded-b-lg border-t border-slate-800\">\n                                <div className=\"text-xs text-slate-500 font-mono flex items-center gap-2\">\n                                    <Terminal className=\"w-3 h-3\" />\n                                    {committing ? \'COMMITTING...\' : \'READY_TO_COMMIT\'}\n                                </div>\n                                <button \n                                    onClick={handleCommit}\n                                    disabled={!currentInput.trim() || committing}\n                                    className=\"flex items-center justify-center gap-2 w-36 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded uppercase tracking-wider transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-emerald-500/20\"\n                                >\n                                    {committing ? <Loader className=\"w-3 h-3 animate-spin\" /> : <Save className=\"w-3 h-3\" />}\n                                    Commit Log\n                                </button>\n                            </div>\n                        </div>\n
+                        {/* Log Viewer */}\n                        <AnimatePresence>\n                            {selectedEntry && (\n                                <MotionDiv layoutId={`log-card-${selectedEntry.id}`} initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className=\"space-y-4\">\n                                    <div className={`border rounded-xl p-6 relative overflow-hidden ${getLevelStyles(selectedEntry.level)}`}>\n                                        <div className=\"flex justify-between items-start mb-4\">\n                                            <div className=\"flex items-center gap-3 flex-wrap\">\n                                                <span className=\"text-xs font-mono text-slate-500 border border-slate-700 px-2 py-0.5 rounded bg-slate-950 flex items-center gap-2\">\n                                                    {getLevelIcon(selectedEntry.level)}\n                                                    {new Date(selectedEntry.timestamp).toLocaleString()}\n                                                </span>\n                                                {selectedEntry.tags?.map(tag => (\n                                                    <span key={tag} className=\"text-[10px] font-mono bg-slate-800 text-slate-400 px-2 py-0.5 rounded\">{tag}</span>\n                                                ))}\n                                            </div>\n                                            <button \n                                                onClick={() => handleAnalyze(selectedEntry)}\n                                                disabled={analyzing || !!selectedEntry.analysis}\n                                                className=\"flex items-center gap-2 text-xs font-bold text-purple-400 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap\"\n                                            >\n                                                {analyzing ? <Loader className=\"w-4 h-4 animate-spin\" /> : <Sparkles className=\"w-4 h-4\" />}\n                                                {selectedEntry.analysis ? \'ANALYSIS COMPLETE\' : \'ANALYZE LOG\'}\n                                            </button>\n                                        </div>\n                                        <div className=\"prose prose-sm prose-invert max-w-none mb-6\">\n                                            <ReactMarkdown>{selectedEntry.content}</ReactMarkdown>\n                                        </div>\n                                        <AnimatePresence>\n                                            {analyzing && <AnalysisSkeleton />}                                            \n                                            {selectedEntry.analysis && (\n                                                <MotionDiv initial={{opacity:0}} animate={{opacity:1}} className=\"mt-6 border-t border-slate-800 pt-6\">\n                                                    <div className=\"flex items-center gap-2 text-purple-400 mb-3 text-xs font-black uppercase tracking-widest\">\n                                                        <Brain className=\"w-4 h-4\" /> Neural Insight\n                                                    </div>\n                                                    <div className=\"bg-purple-900/10 border border-purple-500/20 rounded-lg p-4 text-sm text-slate-300 leading-relaxed prose prose-sm prose-invert max-w-none\">\n                                                        <ReactMarkdown>{selectedEntry.analysis.content}</ReactMarkdown>\n                                                    </div>\n                                                </MotionDiv>\n                                            )}\n                                        </AnimatePresence>\n                                    </div>\n                                </MotionDiv>\n                            )}\n                        </AnimatePresence>\n                    </div>\n\n                     {/* Timeline Sidebar */}\n                    <div className=\"lg:col-span-5 flex flex-col\">\n                        <div className=\"flex items-center justify-between mb-4\">\n                            <h3 className=\"text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2\">\n                                <Calendar className=\"w-4 h-4\" /> Log History\n                            </h3>\n                            {entries.length > 0 && (\n                                <button onClick={() => setShowPurgeModal(true)} className=\"text-xs text-red-500 hover:text-red-400 flex items-center gap-1 transition-colors\">\n                                    <Trash2 className=\"w-3 h-3\" /> Purge All\n                                </button>\n                            )}\n                        </div>\n                        <div className=\"space-y-3 flex-1 overflow-y-auto custom-scrollbar -mr-2 pr-2\">\n                            {entries.length === 0 ? (\n                                <div className=\"text-center h-full flex items-center justify-center border-2 border-dashed border-slate-800 rounded-xl text-slate-600 font-mono text-xs\">\n                                    NO FLIGHT DATA FOUND\n                                </div>\n                            ) : entries.map(entry => (\n                                <MotionDiv layoutId={`log-card-${entry.id}`} key={entry.id}>\n                                <div \n                                    onClick={() => setSelectedEntryId(entry.id)}\n                                    className={`p-4 rounded-lg border cursor-pointer transition-all hover:-translate-y-0.5 group ${selectedEntryId === entry.id ? \'bg-slate-800 border-blue-500/50 shadow-lg shadow-blue-900/10\' : \'bg-slate-900/50 border-slate-800 hover:border-slate-700\'}`}\n                                >\n                                    <div className=\"flex justify-between items-start mb-2\">\n                                        <span className=\"text-[10px] font-mono text-slate-500 flex items-center gap-2\">\n                                            {getLevelIcon(entry.level)}\n                                            {new Date(entry.timestamp).toLocaleDateString()}\n                                        </span>\n                                        {entry.analysis && <Sparkles className=\"w-3 h-3 text-purple-500\" />}\n                                    </div>\n                                    <p className=\"text-sm text-slate-300 line-clamp-2 font-mono leading-relaxed\">\n                                        {entry.content}\n                                    </p>\n                                </div>\n                                </MotionDiv>\n                            ))}\n                        </div>\n                    </div>\n                </main>\n            </div>\n        </>\n    );\n}\n
