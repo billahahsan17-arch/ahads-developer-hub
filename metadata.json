@@ -1,0 +1,8 @@
+{
+  "name": "Ahad's Developer Hub",
+  "description": "An elite engineering operating system and educational platform with 12 pillars of mastery, guided by the Atlas AI mentor.",
+  "requestFramePermissions": [
+    "geolocation",
+    "microphone"
+  ]
+}
