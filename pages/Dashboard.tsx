@@ -140,7 +140,7 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="relative h-full w-full overflow-hidden bg-[#020617]">
+    <div className="relative h-full w-full overflow-hidden bg-[#000000]">
         
         {/* --- HERO SECTION --- */}
         <div className="h-[60vh] relative z-0">
@@ -151,7 +151,7 @@ export default function Dashboard() {
         <div className="absolute inset-0 pt-[55vh] z-10 overflow-y-auto custom-scrollbar">
             
             {/* Dashboard Panels */}
-            <div className="bg-[#020617] border-t border-slate-900/50 shadow-[0_-50px_100px_#020617] min-h-screen">
+            <div className="bg-[#000000] border-t border-slate-900/50 shadow-[0_-50px_100px_#000000] min-h-screen">
                 <div className="max-w-7xl mx-auto p-6 md:p-12 space-y-12 pb-32">
                     
                     <GenesisMonitor />
@@ -358,5 +358,6 @@ export default function Dashboard() {
                 </div>
             </div>
         </div>
-    );
+    </div>
+);
 };
